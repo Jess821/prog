@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="2027 届秋招投递进度管理：多设备同步、搜索筛选、Excel 导入导出。" />
+  <title>2027 秋招投递进度</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">JOB TRACKER</div>
+        <h1>2027 届秋招投递进度</h1>
+        <p class="subtitle">公司、笔试、面试、Offer，一处维护，多端查询。</p>
+      </div>
+      <div class="top-actions">
+        <span id="syncBadge" class="sync-badge">本地模式</span>
+        <button id="logoutBtn" class="btn ghost hidden">退出登录</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="localModeNotice" class="notice hidden">
+        <div>
+          <strong>当前是本地演示模式</strong>
+          <span>数据保存在当前浏览器。配置 Supabase 后即可启用账号登录与多设备云同步。</span>
+        </div>
+        <button id="showSetupBtn" class="btn secondary">查看云同步配置</button>
+      </section>
+
+      <section class="kpi-grid" aria-label="统计概览">
+        <article class="kpi"><span>投递总数</span><strong id="kpiTotal">0</strong></article>
+        <article class="kpi"><span>进入笔试</span><strong id="kpiWritten">0</strong></article>
+        <article class="kpi"><span>进入面试</span><strong id="kpiInterview">0</strong></article>
+        <article class="kpi"><span>Offer</span><strong id="kpiOffer">0</strong></article>
+        <article class="kpi danger"><span>已挂 / 拒绝</span><strong id="kpiRejected">0</strong></article>
+      </section>
+
+      <section class="panel toolbar-panel">
+        <div class="filters">
+          <label class="search-wrap">
+            <span>搜索</span>
+            <input id="searchInput" type="search" placeholder="公司 / 岗位 / 地点 / 备注" autocomplete="off" />
+          </label>
+          <label>
+            <span>当前阶段</span>
+            <select id="stageFilter">
+              <option value="all">全部</option>
+              <option value="已投递">已投递</option>
+              <option value="笔试">笔试</option>
+              <option value="一面">一面</option>
+              <option value="二面">二面</option>
+              <option value="综面">综面</option>
+              <option value="Offer">Offer</option>
+              <option value="已挂">已挂 / 拒绝</option>
+            </select>
+          </label>
+          <label>
+            <span>排序</span>
+            <select id="sortSelect">
+              <option value="seq">序号</option>
+              <option value="updated_desc">最近更新</option>
+              <option value="company">公司名称</option>
+              <option value="stage_desc">阶段靠后</option>
+            </select>
+          </label>
+        </div>
+        <div class="toolbar-actions">
+          <button id="addBtn" class="btn primary">＋ 新增投递</button>
+          <button id="importBtn" class="btn secondary">导入 Excel</button>
+          <button id="exportBtn" class="btn secondary">导出 Excel</button>
+          <input id="excelFileInput" class="hidden" type="file" accept=".xlsx,.xls" />
+        </div>
+      </section>
+
+      <section class="panel table-panel">
+        <div class="table-meta">
+          <div><strong id="visibleCount">0</strong> 条记录</div>
+          <div id="lastSyncText" class="muted"></div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>序号</th>
+                <th>投递公司</th>
+                <th>岗位</th>
+                <th>地点</th>
+                <th>投递</th>
+                <th>笔试</th>
+                <th>一面</th>
+                <th>二面</th>
+                <th>综面</th>
+                <th>Offer</th>
+                <th>当前阶段</th>
+                <th>备注</th>
+                <th class="sticky-right">操作</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+        <div id="emptyState" class="empty-state hidden">
+          <div class="empty-icon">⌕</div>
+          <h3>没有匹配记录</h3>
+          <p>调整搜索条件，或新增一条投递记录。</p>
+        </div>
+      </section>
+
+      <section id="setupPanel" class="panel setup-panel hidden">
+        <div class="setup-head">
+          <div>
+            <h2>启用多设备云同步</h2>
+            <p>Supabase 云同步已配置完成。登录后即可在不同电脑和手机访问同一份秋招记录。</p>
+          </div>
+          <button id="closeSetupBtn" class="icon-btn" aria-label="关闭">×</button>
+        </div>
+        <ol>
+          <li>云数据库已创建并启用登录保护。</li>
+          <li>数据表已启用 RLS，每个账号只能访问自己的记录。</li>
+          <li>前端使用 publishable key，不包含 service_role / secret key。</li>
+          <li>部署整个文件夹后，收藏固定网址即可多设备使用。</li>
+        </ol>
+      </section>
+    </main>
+  </div>
+
+  <div id="recordModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="recordModalTitle">
+    <div class="modal wide">
+      <div class="modal-head">
+        <div>
+          <div class="eyebrow">APPLICATION</div>
+          <h2 id="recordModalTitle">新增投递</h2>
+        </div>
+        <button class="icon-btn" data-close-modal="recordModal" aria-label="关闭">×</button>
+      </div>
+      <form id="recordForm">
+        <input id="recordId" type="hidden" />
+        <div class="form-grid three">
+          <label><span>公司 *</span><input id="companyInput" required maxlength="100" /></label>
+          <label><span>岗位 *</span><input id="roleInput" required maxlength="160" /></label>
+          <label><span>地点</span><input id="locationInput" maxlength="80" placeholder="南京 / 上海 / 成都…" /></label>
+        </div>
+        <div class="section-label">招聘流程</div>
+        <div class="form-grid three">
+          <label><span>投递</span><input id="applicationInput" maxlength="100" placeholder="已投递 / 9.2 投递" /></label>
+          <label><span>笔试</span><input id="writtenInput" maxlength="100" placeholder="9.3 19:00 / 已通过" /></label>
+          <label><span>一面</span><input id="interview1Input" maxlength="100" /></label>
+          <label><span>二面</span><input id="interview2Input" maxlength="100" /></label>
+          <label><span>综面</span><input id="finalInput" maxlength="100" /></label>
+          <label><span>Offer</span><input id="offerInput" maxlength="100" placeholder="已收到 / 薪资待谈" /></label>
+        </div>
+        <div class="form-grid two">
+          <label><span>投递 / JD 链接</span><input id="linkInput" type="url" maxlength="500" placeholder="https://..." /></label>
+          <label><span>下一事项</span><input id="nextEventInput" maxlength="160" placeholder="完成测评 / 参加笔试 / 准备一面" /></label>
+        </div>
+        <label class="full"><span>备注</span><textarea id="notesInput" rows="4" maxlength="2000" placeholder="HR 联系、准备重点、结果反馈等"></textarea></label>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" data-close-modal="recordModal">取消</button>
+          <button type="submit" class="btn primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="authModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal auth-modal">
+      <div class="eyebrow">PRIVATE CLOUD</div>
+      <h2>登录你的秋招进度表</h2>
+      <p class="muted">启用云端后，每台电脑、手机打开同一个链接并登录，即可看到同一份数据。</p>
+      <form id="authForm">
+        <label class="full"><span>邮箱</span><input id="authEmail" type="email" required autocomplete="email" /></label>
+        <label class="full"><span>密码</span><input id="authPassword" type="password" required minlength="6" autocomplete="current-password" /></label>
+        <div id="authMessage" class="form-message hidden"></div>
+        <div class="auth-actions">
+          <button id="loginBtn" type="submit" class="btn primary">登录</button>
+          <button id="signupBtn" type="button" class="btn secondary">首次使用：注册</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="confirmModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal confirm-modal">
+      <h2 id="confirmTitle">确认操作</h2>
+      <p id="confirmText"></p>
+      <div class="modal-actions">
+        <button id="confirmCancel" class="btn ghost">取消</button>
+        <button id="confirmOk" class="btn danger-btn">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastHost" class="toast-host" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
